@@ -3,7 +3,7 @@ import { rateLimit } from 'express-rate-limit';
 import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { createTarotAI, InputError, ProviderError } from './groq.mjs';
-import { openDatabase } from './db.mjs';
+import { DatabaseConfigError, openDatabase } from './db.mjs';
 import { AuthError, createAccounts, SESSION_COOKIE, SESSION_MAX_AGE } from './accounts.mjs';
 
 function readCookie(req, name) {
@@ -33,7 +33,7 @@ export function createApp({ ai, apiKey, model, serveStatic = false, rateLimitMax
   // Behind Vercel (or another proxy) the client address comes from X-Forwarded-For; the rate limits need it.
   if (trustProxy) app.set('trust proxy', 1);
   app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
-  app.get('/api/health', (_req, res) => res.json({ status: 'ok', aiConfigured: !!(apiKey || ai) }));
+  app.get('/api/health', (_req, res) => res.json({ status: 'ok', aiConfigured: !!(apiKey || ai), database: database.missing ? 'missing' : database.url || database.client ? 'postgres' : 'sqlite' }));
   app.use('/api', (req, res, next) => {
     const origin = req.get('origin');
     if (req.method !== 'GET' && origin) { try { if (new URL(origin).host !== req.get('host')) return res.status(403).json({ error: 'Origem não permitida.' }); } catch { return res.status(403).json({ error: 'Origem inválida.' }); } }
@@ -79,9 +79,10 @@ export function createApp({ ai, apiKey, model, serveStatic = false, rateLimitMax
   });
 
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Rota não encontrada.' }));
-  if (serveStatic && existsSync(resolve('dist/index.html'))) {
-    app.use(express.static(resolve('dist'), { dotfiles: 'deny', index: 'index.html' }));
-    app.get('/{*path}', (_req, res) => res.sendFile(resolve('dist/index.html')));
+  // serveStatic is the built frontend's folder (or false). It comes from the caller so Vercel's file tracer does not pack dist/ into the function.
+  if (serveStatic && existsSync(resolve(serveStatic, 'index.html'))) {
+    app.use(express.static(resolve(serveStatic), { dotfiles: 'deny', index: 'index.html' }));
+    app.get('/{*path}', (_req, res) => res.sendFile(resolve(serveStatic, 'index.html')));
   }
   app.use((error, _req, res, _next) => {
     if (error instanceof InputError) return res.status(400).json({ error: error.message });
@@ -90,6 +91,7 @@ export function createApp({ ai, apiKey, model, serveStatic = false, rateLimitMax
       const code = error.code;
       return res.status(code === 'rate_limit' ? 429 : 503).json({ error: code === 'not_configured' ? 'O serviço de IA ainda não foi configurado.' : 'Não foi possível consultar a IA. Tente novamente em instantes.', code });
     }
+    if (error instanceof DatabaseConfigError) { console.error(error.message); return res.status(503).json({ error: 'O banco de dados do site ainda não foi configurado.' }); }
     if (error?.type === 'entity.too.large') return res.status(413).json({ error: 'Solicitação muito grande.' });
     if (error?.type === 'entity.parse.failed') return res.status(400).json({ error: 'JSON inválido.' });
     console.error(error);

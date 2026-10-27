@@ -9,3 +9,4 @@ tmp/
 data/
 .openai/
 .vercel/
+build/

@@ -33,9 +33,19 @@ test('contas e histórico funcionam no Postgres usado em produção', async () =
 });
 
 test('na Vercel o app exige Postgres e usa cookies seguros atrás do proxy', () => {
-  assert.throws(() => appOptions({ VERCEL: '1' }), /DATABASE_URL/);
+  assert.deepEqual(appOptions({ VERCEL: '1' }).database, { missing: true });
   const vercel = appOptions({ VERCEL: '1', POSTGRES_URL: 'postgres://u:p@host/db' });
   assert.deepEqual(vercel.database, { url: 'postgres://u:p@host/db' }); assert.equal(vercel.secureCookies, true); assert.equal(vercel.trustProxy, true);
   const local = appOptions({});
   assert.deepEqual(local.database, { path: 'data/arcana.db' }); assert.equal(local.secureCookies, false); assert.equal(local.trustProxy, false);
+});
+
+test('sem banco configurado a API responde 503 com aviso, sem derrubar a função', async () => {
+  const server = createApp({ database: { missing: true } }).listen(0, '127.0.0.1'); await new Promise(resolve => server.once('listening', resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    assert.equal((await (await fetch(`${base}/api/health`)).json()).database, 'missing');
+    const login = await fetch(`${base}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"email":"a@b.co","password":"senha-segura-1"}' });
+    assert.equal(login.status, 503); assert.match((await login.json()).error, /banco de dados/);
+  } finally { await new Promise(resolve => server.close(resolve)); }
 });

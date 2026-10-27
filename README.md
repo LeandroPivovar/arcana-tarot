@@ -44,14 +44,14 @@ Se a sessão expirar no meio de uma consulta, a pessoa volta para o login com a 
 
 ## Deploy na Vercel
 
-O projeto já vem pronto para a Vercel (`vercel.json`): o Vite gera a interface em `dist/` e todas as rotas `/api/*` vão para uma única função Node (`api/index.mjs`), que usa o mesmo app Express do servidor local. As demais rotas devolvem `index.html`, para que `/historico`, `/baralho/12` etc. abram direto.
+O projeto já vem pronto para a Vercel (`vercel.json`): o Vite gera a interface em `dist/` e todas as rotas `/api/*` vão para uma única função Node (`api/index.mjs`), que usa o mesmo app Express do servidor local. Como o servidor compartilha arquivos `.ts` com o frontend e a Vercel os converte para `.js` ao empacotar a função, `npm run build` também gera `build/server.mjs` (esbuild, `scripts/build-server.mjs`): um único arquivo JavaScript que a função importa. As demais rotas devolvem `index.html`, para que `/historico`, `/baralho/12` etc. abram direto.
 
 1. Em [vercel.com/new](https://vercel.com/new), importe o repositório do GitHub. O framework (Vite), o build e a pasta de saída são lidos do `vercel.json`.
 2. Crie um banco Postgres: no projeto, **Storage → Create Database → Neon** (plano gratuito) e conecte ao projeto. Isso cria `DATABASE_URL` automaticamente. Qualquer Postgres serve (Supabase, Neon direto etc.): basta definir `DATABASE_URL`.
 3. Em **Settings → Environment Variables**, adicione `GROQ_API_KEY` (e, se quiser, `GROQ_MODEL`).
 4. Faça o deploy (ou **Redeploy** depois de criar as variáveis).
 
-Na Vercel, a função exige `DATABASE_URL`: sem ela, as rotas falham com uma mensagem clara no log, em vez de perder contas num disco temporário. Os cookies saem com `Secure` e o IP real vem do proxy da Vercel. A função tem até 60 s por requisição (a interpretação da IA leva até 30 s). O limite de tentativas fica na memória de cada instância da função, então é uma proteção aproximada.
+Na Vercel, a função exige `DATABASE_URL`: sem ela, as rotas de conta respondem 503 com um aviso (e uma mensagem no log), em vez de perder contas num disco temporário. `GET /api/health` mostra se a IA e o banco (`postgres`, `sqlite` ou `missing`) estão configurados. Os cookies saem com `Secure` e o IP real vem do proxy da Vercel. A função tem até 60 s por requisição (a interpretação da IA leva até 30 s). O limite de tentativas fica na memória de cada instância da função, então é uma proteção aproximada.
 
 ## Groq integrada ao backend
 

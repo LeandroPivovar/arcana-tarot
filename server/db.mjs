@@ -4,7 +4,10 @@ import { dirname } from 'node:path';
 // One small async interface over two engines: SQLite for local development and tests, Postgres in production
 // (Vercel functions have no persistent disk). Queries are written once with `?` placeholders.
 //   all(sql, params) → rows · get(sql, params) → first row · run(sql, params) → nothing
-export async function openDatabase({ url, path = ':memory:', client } = {}) {
+export class DatabaseConfigError extends Error {}
+
+export async function openDatabase({ url, path = ':memory:', client, missing } = {}) {
+  if (missing) throw new DatabaseConfigError('Banco de dados não configurado: defina DATABASE_URL (Postgres) nas variáveis de ambiente.');
   if (client) return openPostgres(client);
   if (url) {
     const { default: pg } = await import('pg');
