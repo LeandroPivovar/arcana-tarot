@@ -1,0 +1,11 @@
+node_modules/
+dist/
+tmp/
+.env
+.env.local
+.env.*
+!.env.example
+*.tsbuildinfo
+data/
+.openai/
+.vercel/
